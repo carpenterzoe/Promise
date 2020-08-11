@@ -45,12 +45,13 @@ class Promise {
       this.state = Promise.REJECTED
       this.reason = reason
 
-      this.ononRejectedCallbacks.forEach((fn) => fn(this.reason))
+      this.onRejectedCallbacks.forEach((fn) => fn(this.reason))
     }
   }
 
   then(onFulfilled, onRejected) {
-    //  * 根据promise/A+ 规范，then的两个参数必须是函数
+    // * 根据promise/A+ 规范，then的两个参数必须是函数
+    // * 如果不是，这里处理一层，把结果包裹成函数返回
     if (typeof onFulfilled !== 'function') {
       onFulfilled = function(value) {
         return value
@@ -64,14 +65,33 @@ class Promise {
     }
 
     if (this.state === Promise.FULFILLED) {
+      // * 处理 .then 使其不能在new Promise之后就立即同步执行
+      // * 而是必须等第一梯队的事件处理完了，第二轮拿到resolve的值 才执行 onFulfilled 成功回调
+      // ? 这种处理只有在 resolve() 没有异步执行的时候才生效 ?????
       setTimeout(() => {
         onFulfilled(this.value)
       })
     }
 
     if (this.state === Promise.REJECTED) {
+      // * 这里跟上面 onFulfilled 处理同理
       setTimeout(() => {
         onRejected(this.reason)
+      })
+    }
+
+    if (this.state === Promise.PENDING) {
+      this.onFulfilledCallbacks.push((value) => {
+        setTimeout(() => {
+          console.log(value, 'value 从哪来的')
+          onFulfilled(value)
+        })
+      })
+
+      this.ononRejectedCallbacks.push((reason) => {
+        setTimeout(() => {
+          onRejected(reason)
+        })
       })
     }
   }
